@@ -91,18 +91,22 @@ Point a Prometheus scraper at that endpoint, or query it directly for request-la
 
 ## Running tests
 
+Unit tests run inside `django_app/venv` (the app's own env). Integration/e2e tests run against the repo root's `requirements-dev.txt`, which has no Django dependency — keep them in a separate venv at the repo root rather than reusing `django_app/venv`, so each layer only installs what it actually needs (see `docs/TESTING_GUIDELINES.md`).
+
 ```bash
 # Unit tests (no infra required — uses SQLite + a mock Snowflake client)
 cd django_app
+python3.12 -m venv venv && source venv/bin/activate   # if not already created
 pip install -r requirements-dev.txt
 pytest
 
-# Integration tests (requires steps 1-2 above)
-pip install -r ../requirements-dev.txt   # from repo root
+# Integration tests (requires steps 1-2 above) — separate venv at repo root
 cd ..
+python3.12 -m venv venv && source venv/bin/activate   # if not already created
+pip install -r requirements-dev.txt
 pytest -m integration
 
-# End-to-end tests (requires steps 1-3 above)
+# End-to-end tests (requires steps 1-3 above, i.e. `manage.py runserver` also running)
 pytest -m e2e
 ```
 
