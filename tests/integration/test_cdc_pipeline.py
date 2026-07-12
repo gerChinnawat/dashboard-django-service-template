@@ -15,9 +15,13 @@ import uuid
 
 import pytest
 
-from tests.conftest import consume_latest_message
+from tests.conftest import wait_for_message
 
 pytestmark = pytest.mark.integration
+
+
+def _after(payload):
+    return payload["payload"]["after"] if "payload" in payload else payload["after"]
 
 
 def test_device_insert_produces_a_cdc_event_on_kafka(postgres_connection, kafka_connect_registered):
@@ -34,11 +38,14 @@ def test_device_insert_produces_a_cdc_event_on_kafka(postgres_connection, kafka_
         )
         device_id = cursor.fetchone()[0]
 
-    raw_message = consume_latest_message("iot.public.devices", timeout_seconds=20)
-    assert raw_message is not None, "no CDC event observed on iot.public.devices within timeout"
+    payload = wait_for_message(
+        "iot.public.devices",
+        lambda p: _after(p).get("device_code") == device_code,
+        timeout_seconds=20,
+    )
+    assert payload is not None, "no CDC event observed on iot.public.devices within timeout"
 
-    payload = json.loads(raw_message)
-    after = payload["payload"]["after"] if "payload" in payload else payload["after"]
+    after = _after(json.loads(payload))
     assert after["id"] == device_id
     assert after["device_code"] == device_code
 
@@ -65,9 +72,12 @@ def test_telemetry_insert_produces_a_cdc_event_on_kafka(postgres_connection, kaf
             (device_id, 27.3, 41.0),
         )
 
-    raw_message = consume_latest_message("iot.public.telemetry", timeout_seconds=20)
-    assert raw_message is not None, "no CDC event observed on iot.public.telemetry within timeout"
+    payload = wait_for_message(
+        "iot.public.telemetry",
+        lambda p: _after(p).get("device_id") == device_id,
+        timeout_seconds=20,
+    )
+    assert payload is not None, "no CDC event observed on iot.public.telemetry within timeout"
 
-    payload = json.loads(raw_message)
-    after = payload["payload"]["after"] if "payload" in payload else payload["after"]
+    after = _after(json.loads(payload))
     assert after["device_id"] == device_id

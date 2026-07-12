@@ -26,9 +26,13 @@ import uuid
 import pytest
 import requests
 
-from tests.conftest import consume_latest_message
+from tests.conftest import wait_for_message
 
 pytestmark = pytest.mark.e2e
+
+
+def _after(payload):
+    return payload["payload"]["after"] if "payload" in payload else payload["after"]
 
 
 def test_device_telemetry_flows_from_postgres_to_kafka_and_api_serves_dashboard_data(
@@ -56,16 +60,20 @@ def test_device_telemetry_flows_from_postgres_to_kafka_and_api_serves_dashboard_
             (device_id, 28.4, 55.0),
         )
 
-    # 2. Debezium captures both writes and publishes them to Kafka.
-    device_event = consume_latest_message("iot.public.devices", timeout_seconds=20)
-    telemetry_event = consume_latest_message("iot.public.telemetry", timeout_seconds=20)
+    # 2. Debezium captures both writes and publishes them to Kafka. Match by
+    #    this test run's unique device_code/device_id rather than "the next
+    #    message" -- avoids racing a consumer's offset baseline against
+    #    Debezium's publish latency.
+    device_event = wait_for_message(
+        "iot.public.devices", lambda p: _after(p).get("device_code") == device_code, timeout_seconds=20
+    )
+    telemetry_event = wait_for_message(
+        "iot.public.telemetry", lambda p: _after(p).get("device_id") == device_id, timeout_seconds=20
+    )
     assert device_event is not None, "device insert never reached Kafka"
     assert telemetry_event is not None, "telemetry insert never reached Kafka"
 
-    device_payload = json.loads(device_event)
-    device_after = (
-        device_payload["payload"]["after"] if "payload" in device_payload else device_payload["after"]
-    )
+    device_after = _after(json.loads(device_event))
     assert device_after["device_code"] == device_code
 
     # 3. The Django dashboard API is independently reachable and serves the

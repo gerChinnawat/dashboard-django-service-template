@@ -9,14 +9,14 @@ See also: [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md), [`docs/TESTI
 ## Prerequisites
 
 - Docker + Docker Compose
-- Python 3.11+
+- Python 3.11–3.12 (avoid 3.13+ for now — `cffi`/`snowflake-connector-python` may not ship prebuilt wheels yet, which forces a source build and fails if your system `clang`/Xcode setup is broken)
 - `psql` and `curl` (for manual verification steps below)
 
 ---
 
 ## 1. Start the local stack
 
-Brings up Postgres (CDC-enabled), Zookeeper, Kafka, and Kafka Connect (Debezium):
+Brings up Postgres (CDC-enabled), Zookeeper, Kafka, Kafka Connect (Debezium), and Redis (dashboard response cache):
 
 ```bash
 docker compose up -d
@@ -42,7 +42,7 @@ curl localhost:8083/connectors/iot-postgres-connector/status
 
 ```bash
 cd django_app
-python -m venv venv && source venv/bin/activate
+python3.12 -m venv venv && source venv/bin/activate
 cp ../.env.example ../.env   # adjust if your Postgres/Kafka ports differ
 pip install -r requirements.txt
 python manage.py runserver
@@ -72,6 +72,10 @@ docker exec -it iot-kafka kafka-console-consumer \
 ```
 
 ---
+
+## Caching
+
+Dashboard endpoints (`/dashboard/summary`, `/devices`, `/site/<id>`, `/alerts`) cache their full response in Redis for `DASHBOARD_CACHE_TTL_SECONDS` (default 60s, see `.env`) — the underlying `device_summary_5m` rollup only changes every 5 minutes, so this cuts repeated Snowflake queries without serving stale data for long. Caching is keyed by request path via Django's `cache_page`; see `dashboard/views.py`. Unit tests use a `DummyCache` backend (`config/settings_test.py`) so no Redis is required and each test hits the (mocked) Snowflake client directly.
 
 ## Logging & metrics
 

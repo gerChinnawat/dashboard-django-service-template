@@ -1,5 +1,8 @@
 import logging
 
+from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,6 +13,14 @@ from .serializers import AlertRowSerializer, DeviceSerializer, SummaryRowSeriali
 logger = logging.getLogger(__name__)
 
 
+def cache_response():
+    """Caches a view's full response keyed by request path (Redis-backed,
+    see CACHES in settings) -- device_summary_5m only changes every 5
+    minutes, so short-lived caching cuts repeated Snowflake queries."""
+    return method_decorator(cache_page(settings.DASHBOARD_CACHE_TTL_SECONDS), name="get")
+
+
+@cache_response()
 class SummaryView(APIView):
     """GET /dashboard/summary -- pre-aggregated device_summary_5m rollup."""
 
@@ -19,6 +30,7 @@ class SummaryView(APIView):
         return Response(SummaryRowSerializer(rows, many=True).data)
 
 
+@cache_response()
 class DevicesView(APIView):
     """GET /dashboard/devices -- distinct sites/devices present in the summary data."""
 
@@ -28,6 +40,7 @@ class DevicesView(APIView):
         return Response(DeviceSerializer(rows, many=True).data)
 
 
+@cache_response()
 class SiteSummaryView(APIView):
     """GET /dashboard/site/{id} -- summary rows filtered to a single site."""
 
@@ -37,6 +50,7 @@ class SiteSummaryView(APIView):
         return Response(SummaryRowSerializer(rows, many=True).data)
 
 
+@cache_response()
 class AlertsView(APIView):
     """GET /dashboard/alerts -- summary windows with at least one alert."""
 

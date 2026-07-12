@@ -11,3 +11,11 @@ DATABASES = {
         "NAME": ":memory:",
     }
 }
+
+# Dummy cache in unit tests -- no Redis, and each test patches
+# get_snowflake_client() expecting it to be called fresh every request.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+    }
+}

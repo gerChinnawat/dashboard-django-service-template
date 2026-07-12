@@ -13,6 +13,7 @@ ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "django_prometheus",
+    "django.contrib.staticfiles",
     "rest_framework",
     "telemetry",
     "dashboard",
@@ -67,7 +68,22 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Caches dashboard responses to cut down on repeated Snowflake queries --
+# the underlying device_summary_5m rollup only changes every 5 minutes
+# (see sql/snowflake_aggregation.sql), so a short TTL is safe.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.environ.get("REDIS_URL", "redis://localhost:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+DASHBOARD_CACHE_TTL_SECONDS = int(os.environ.get("DASHBOARD_CACHE_TTL_SECONDS", "60"))
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [

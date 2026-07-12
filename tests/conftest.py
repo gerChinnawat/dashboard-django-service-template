@@ -7,7 +7,9 @@ dependency it needs isn't reachable, so `pytest -m integration` gives a clear
 "start the stack first" message instead of a confusing connection traceback.
 """
 
+import json
 import os
+import time
 
 import psycopg2
 import pytest
@@ -73,19 +75,33 @@ def django_server_reachable():
     return DJANGO_BASE_URL
 
 
-def consume_latest_message(topic, timeout_seconds=15):
+def wait_for_message(topic, predicate, timeout_seconds=20):
+    """Scans `topic` from the beginning until a message satisfying
+    `predicate(payload_dict)` is found, or `timeout_seconds` elapses.
+
+    Matches by content (e.g. a test-run-unique device_code) rather than by
+    "the next message after I subscribe" -- a consumer positioned at the
+    tail can lose the race against Debezium and end up past the event it's
+    looking for if the write happens (or another test's write already
+    happened) before/while it's establishing its offset."""
     from kafka import KafkaConsumer
 
     consumer = KafkaConsumer(
         topic,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        auto_offset_reset="latest",
-        consumer_timeout_ms=timeout_seconds * 1000,
+        auto_offset_reset="earliest",
         value_deserializer=lambda v: v.decode("utf-8") if v is not None else None,
     )
+    deadline = time.monotonic() + timeout_seconds
     try:
-        for message in consumer:
-            return message.value
+        while time.monotonic() < deadline:
+            records = consumer.poll(timeout_ms=1000)
+            for topic_partition_records in records.values():
+                for record in topic_partition_records:
+                    if record.value is None:
+                        continue
+                    if predicate(json.loads(record.value)):
+                        return record.value
+        return None
     finally:
         consumer.close()
-    return None
