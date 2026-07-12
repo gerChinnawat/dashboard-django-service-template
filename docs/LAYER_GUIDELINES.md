@@ -29,7 +29,7 @@ URL (urls.py)
 | **Serializer (DTO)** | `<app>/serializers.py` | The external API contract — field names, types, nullability | Where the data came from (Postgres, Snowflake, a service's internal dict shape), business rules |
 | **Util** | `core/utils.py` (or `<app>/utils.py` for app-specific helpers) | Pure input → output logic, no I/O | Django settings, the database, HTTP, other layers |
 
-Not every endpoint needs all five. `dashboard/views.py` today calls the Snowflake repository (`core/snowflake_client.py`) directly with no service layer, because there's nothing to orchestrate — one repository call, one serializer. **Add a service only once a view would otherwise contain business logic or call more than one repository.** Don't add an empty pass-through service "for consistency" — see `CLAUDE.md`'s instruction against premature abstraction.
+Not every endpoint needs all five. `dashboard/views.py` today calls the Snowflake repository (`core/snowflake_client.py`) directly with no service layer, because there's nothing to orchestrate — one repository call, one serializer. **Add a service only once a view would otherwise contain business logic or call more than one repository.** Don't add an empty pass-through service "for consistency" — that's premature abstraction.
 
 ---
 
@@ -65,7 +65,7 @@ Think of a `serializers.Serializer` subclass as a **Data Transfer Object**: a fi
 
 - **Decouples the wire format from internal representation.** A repository or Snowflake column can be renamed, restructured, or recomputed without the API contract moving — the serializer is the one place that translates. Without it, a rename in `sql/snowflake_aggregation.sql` or a mock fixture silently changes what every API consumer receives.
 - **Is the single source of truth for what the API promises.** Anyone can read `serializers.py` and know the exact contract — field names, types, nullability — without tracing through a repository or Snowflake schema.
-- **Coerces and validates at the boundary.** `serializers.FloatField()` on a `Decimal` from Snowflake, `serializers.DateTimeField()` on a raw timestamp — the serializer normalizes types once, here, instead of every caller having to know what shape the underlying data happens to be in.
+- **Coerces and validates at the boundary.** `serializers.FloatField()` on a `Decimal` from Snowflake, `serializers.DateTimeField()` on a raw timestamp — the serializer normalizes types once, here, instead of every caller having to know what shape the underlying data happens to be in. Coercion means type, not precision: serializers never round — see [`DATA_PRECISION_GUIDELINES.md`](DATA_PRECISION_GUIDELINES.md).
 - **Can hide internal-only fields.** A service's return dict is free to carry extra fields useful for logging or a future feature; the serializer only emits what's declared, so nothing leaks into the API by accident.
 
 **Good** (`dashboard/serializers.py` + `views.py` — DTO shape is independent of the mock/real Snowflake client's row shape):

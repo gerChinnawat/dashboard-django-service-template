@@ -179,6 +179,8 @@ return Response(rows)  # raw dicts straight from the client, whatever shape they
 
 Why: without a serializer, a column rename in Snowflake (or in the mock fixture) silently changes the API's JSON shape with no single place documenting what consumers can rely on.
 
+Note: serializers define shape and types, **not display precision** — don't add `round()` here or in views. The API returns unrounded aggregate values; rounding happens only at display time in the frontend. See [`DATA_PRECISION_GUIDELINES.md`](DATA_PRECISION_GUIDELINES.md).
+
 ---
 
 ## 6. Infra config (Debezium connector, docker-compose) stays declarative and out of application code

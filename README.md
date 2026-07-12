@@ -2,7 +2,7 @@
 
 A local dev stack for the CDC → Kafka → Snowflake → Django architecture described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Postgres (OLTP) → Debezium (CDC) → Kafka → Snowflake (OLAP, aggregated) → Django REST API → dashboard.
 
-See also: [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md), [`docs/TESTING_GUIDELINES.md`](docs/TESTING_GUIDELINES.md), [`docs/LAYER_GUIDELINES.md`](docs/LAYER_GUIDELINES.md), [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md), [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/GIT_GUIDE.md`](docs/GIT_GUIDE.md).
+See also: [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md), [`docs/TESTING_GUIDELINES.md`](docs/TESTING_GUIDELINES.md), [`docs/LAYER_GUIDELINES.md`](docs/LAYER_GUIDELINES.md), [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md), [`docs/DATA_PRECISION_GUIDELINES.md`](docs/DATA_PRECISION_GUIDELINES.md), [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/GIT_GUIDE.md`](docs/GIT_GUIDE.md).
 
 ---
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A local dev implementation of an IoT analytics pipeline: `Postgres (OLTP) → Debezium (CDC) → Kafka → Snowflake (OLAP, aggregated) → Django REST API → dashboard`. Full architecture rationale is in `docs/ARCHITECTURE.md`. This repo currently implements the docker-compose stack + Django skeleton; there is no frontend yet.
 
-Read `docs/CODING_GUIDELINES.md` and `docs/TESTING_GUIDELINES.md` before changing code — both have concrete good/bad examples pulled from this codebase and are treated as binding conventions, not suggestions. `docs/LAYER_GUIDELINES.md` explains where new code belongs (view/service/repository/model/util) with a worked example — read it before adding a new module. `docs/NAMING_CONVENTIONS.md` covers what to call things; naming is lint-enforced (ruff's `N` rule set, see `pyproject.toml`) but not auto-fixed by `make format`.
+Read `docs/CODING_GUIDELINES.md` and `docs/TESTING_GUIDELINES.md` before changing code — both have concrete good/bad examples pulled from this codebase and are treated as binding conventions, not suggestions. `docs/LAYER_GUIDELINES.md` explains where new code belongs (view/service/repository/model/util) with a worked example — read it before adding a new module. `docs/NAMING_CONVENTIONS.md` covers what to call things; naming is lint-enforced (ruff's `N` rule set, see `pyproject.toml`) but not auto-fixed by `make format`. `docs/DATA_PRECISION_GUIDELINES.md` covers numeric precision layer by layer (store raw, aggregate raw, round only at display) and has a checklist for adding a new measurement — read it before touching a numeric column or serializer field.
 
 ## Commands
 

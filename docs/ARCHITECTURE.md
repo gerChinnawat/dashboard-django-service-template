@@ -196,6 +196,8 @@ Example summary table:
 
 This significantly reduces query time.
 
+Aggregates are computed and served unrounded; display rounding is the frontend's job — see [`DATA_PRECISION_GUIDELINES.md`](DATA_PRECISION_GUIDELINES.md) for how precision is handled at each stage of the pipeline.
+
 ---
 
 ## Django Responsibilities
