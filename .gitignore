@@ -21,6 +21,9 @@ media/
 htmlcov/
 *.cover
 
+# Linting
+.ruff_cache/
+
 # Editors / OS
 .vscode/*
 !.vscode/settings.json
