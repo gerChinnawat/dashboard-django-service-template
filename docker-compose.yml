@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: debezium/postgres:16
+    image: debezium/postgres:17-alpine
     container_name: iot-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-iot_operational}
@@ -40,7 +40,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   kafka-connect:
-    image: debezium/connect:2.7
+    image: debezium/connect:2.7.3.Final
     container_name: iot-kafka-connect
     depends_on:
       - kafka

@@ -1,6 +1,27 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .env
 venv/
 .venv/
+env/
 *.egg-info/
+build/
+dist/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
