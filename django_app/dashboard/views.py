@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 
 from core.snowflake_client import get_snowflake_client
 
-from .serializers import AlertRowSerializer, DeviceSerializer, SummaryRowSerializer
+from .serializers import AlertRowSerializer, DeviceSerializer, SiteHealthSerializer, SummaryRowSerializer
+from .services import get_site_health
 
 logger = logging.getLogger(__name__)
 
@@ -58,3 +59,17 @@ class AlertsView(APIView):
         rows = get_snowflake_client().get_alerts()
         logger.info("dashboard.alerts served", extra={"row_count": len(rows)})
         return Response(AlertRowSerializer(rows, many=True).data)
+
+
+@cache_response()
+class SiteHealthView(APIView):
+    """GET /dashboard/site/{id}/health -- derived status (ok/warning/critical)
+    for a site's latest summary window. Thin: all the logic lives in
+    services.get_site_health (see docs/LAYER_GUIDELINES.md, "View")."""
+
+    def get(self, request, site_id):
+        health = get_site_health(site_id)
+        if health is None:
+            return Response({"detail": "no summary data for this site"}, status=404)
+        logger.info("dashboard.site_health served", extra={"site_id": site_id, "status": health["status"]})
+        return Response(SiteHealthSerializer(health).data)

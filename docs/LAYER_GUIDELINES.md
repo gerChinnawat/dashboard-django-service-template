@@ -41,12 +41,13 @@ Read-only shape of a table. In this repo, operational models mirror Postgres (`t
 
 ### Repository
 
-The **only** place allowed to write a Django ORM queryset or Snowflake SQL. Two examples already exist in this codebase:
+The **only** place allowed to write a Django ORM queryset or Snowflake SQL. The one example that exists in this codebase today:
 
-- `core/snowflake_client.py` — `SnowflakeClient` / `MockSnowflakeClient`, one method per query, e.g. `get_summary()`, `get_site_summary(site_id)`.
-- For Postgres reads, a repository is a plain function wrapping the ORM (see the worked example below) — it doesn't need a class if there's no mock/real split to manage.
+- `core/snowflake_client.py` — `SnowflakeClient` / `MockSnowflakeClient`, one method per query, e.g. `get_summary()`, `get_site_summary(site_id)`. It's mock-first (`docs/CODING_GUIDELINES.md` #1), which is exactly why every layer built on top of it is unit-testable with zero infra.
 
 A repository returns plain data (dicts, model instances, lists) — never a `Response`, never a serializer.
+
+**A caveat specific to this repo: a Postgres-backed repository (querying `telemetry/models.py`) cannot be unit tested.** Those models are `managed = False` (`CODING_GUIDELINES.md` #2) — Django never creates their tables, including in the SQLite test database, so `Device.objects.get(...)` raises `OperationalError: no such table` under `pytest` (confirm yourself: `telemetry/tests/test_models.py`'s models are only ever instantiated in memory, never queried). A repository wrapping these models is real and useful, but its test belongs in `tests/integration/` against the real docker-compose Postgres — not `django_app/*/tests/`. Keep that in mind before reaching for a Postgres repository just because the Snowflake pattern makes it look easy; it changes which test layer you're committing to.
 
 ### Service
 
@@ -92,7 +93,7 @@ return Response(rows)  # if Snowflake adds an internal `_debug_query_id` column
 
 **This also applies to input, not just output.** If a future endpoint accepts a request body or query params beyond a simple path parameter, define an input serializer the same way (`serializers.Serializer` with `is_valid()`/`validated_data`) rather than reading `request.data` directly in the view or service — same DTO principle, applied to the direction data flows in.
 
-**In the worked example below**, `DeviceHealthSerializer` is deliberately a different shape than the dict `get_device_health()` returns internally — the service is free to add, say, an internal `_raw_summary_row` key for debugging without it ever reaching the response, because the serializer only reads the five fields it declares.
+**In the worked example below**, `SiteHealthSerializer`'s fields happen to match `get_site_health()`'s return dict exactly — but that's incidental, not required. The service is free to add, say, an internal `_raw_summary_row` key for debugging later without it ever reaching the response, because the serializer only reads the fields it declares.
 
 ### Util
 
@@ -100,15 +101,17 @@ Pure functions: given the same input, always the same output, no side effects, n
 
 ---
 
-## Worked example: adding a "device health" endpoint
+## Worked example: `GET /dashboard/site/<site_id>/health`
 
-Goal: `GET /dashboard/device/<device_code>/health` returns whether a device is `ok`, `warning`, or `critical`, based on its Postgres registration (which site it's in) and that site's latest Snowflake summary.
+This is a real endpoint in the codebase (not hypothetical) — read the actual files alongside this section: `core/utils.py`, `dashboard/services.py`, `dashboard/serializers.py`, `dashboard/views.py`, `dashboard/urls.py`, and their tests in `core/tests/test_utils.py`, `dashboard/tests/test_services.py`, `dashboard/tests/test_views.py::SiteHealthViewTests`.
 
-This touches every layer, because it genuinely needs to: look up a device in Postgres (repository #1), pull that site's summary from Snowflake (repository #2 — already exists), classify the result (pure logic → util), and combine both lookups (service). A single view calling a single repository would not be enough here, which is exactly the signal to add a service.
+Goal: return whether a site is `ok`, `warning`, or `critical`, derived from its latest Snowflake summary row (`avg_temp`, `max_temp`).
 
-### 1. Util — pure classification logic
+Deliberately **not** the Postgres/`Device` cross-lookup example from an earlier version of this doc — that would require a repository over `telemetry/models.py`, which (per the caveat above) can only be tested at the integration layer, not unit tested. This example stays entirely within what `MockSnowflakeClient` already covers, which is why every layer below is unit-testable with zero infra. Combining a Postgres repository with a Snowflake repository in one service is still a legitimate pattern — just budget for an integration test, not a unit test, when you do it.
 
-`core/utils.py` (new file):
+A service is warranted here even though there's only one repository call, because there's real business logic (the ok/warning/critical classification) that doesn't belong in the view — that's the "business logic" half of the "business logic OR multiple repositories" rule from the layer table above.
+
+### 1. Util — pure classification logic (`core/utils.py`)
 
 ```python
 def classify_temperature(avg_temp, max_temp):
@@ -120,115 +123,75 @@ def classify_temperature(avg_temp, max_temp):
     return "ok"
 ```
 
-### 2. Repository — Postgres device lookup
-
-`telemetry/repository.py` (new file):
-
-```python
-from .models import Device
-
-
-class DeviceNotFound(Exception):
-    pass
-
-
-def get_device_by_code(device_code):
-    """The only place that queries the Device model directly."""
-    try:
-        return Device.objects.get(device_code=device_code)
-    except Device.DoesNotExist:
-        raise DeviceNotFound(device_code) from None
-```
-
-(The Snowflake side already has its repository: `get_snowflake_client().get_site_summary(site_id)` in `core/snowflake_client.py` — no changes needed there.)
-
-### 3. Service — orchestrates both repositories + the util
-
-`dashboard/services.py` (new file):
+### 2. Service — orchestrates the existing Snowflake repository + the util (`dashboard/services.py`)
 
 ```python
 from core.snowflake_client import get_snowflake_client
 from core.utils import classify_temperature
-from telemetry.repository import DeviceNotFound, get_device_by_code
 
 
-class DeviceNotFoundError(Exception):
-    pass
+def get_site_health(site_id):
+    """Returns None if the site has no summary data (the view turns that
+    into a 404)."""
+    rows = get_snowflake_client().get_site_summary(site_id)
+    if not rows:
+        return None
 
-
-def get_device_health(device_code):
-    try:
-        device = get_device_by_code(device_code)
-    except DeviceNotFound:
-        raise DeviceNotFoundError(device_code) from None
-
-    summary_rows = get_snowflake_client().get_site_summary(device.site)
-    if not summary_rows:
-        return {"device_code": device_code, "site": device.site, "status": "ok", "avg_temp": None, "max_temp": None}
-
-    latest = summary_rows[0]
-    status = classify_temperature(latest["avg_temp"], latest["max_temp"])
+    latest = rows[0]
     return {
-        "device_code": device_code,
-        "site": device.site,
-        "status": status,
+        "site": site_id,
+        "status": classify_temperature(latest["avg_temp"], latest["max_temp"]),
         "avg_temp": latest["avg_temp"],
         "max_temp": latest["max_temp"],
+        "alert_count": latest["alert_count"],
     }
 ```
 
-Note: `services.py` never imports `rest_framework` — it's plain Python, callable from a view, a management command, or a test with no HTTP involved.
+`services.py` never imports `rest_framework` — it's plain Python, callable from a view, a management command, or a test with no HTTP involved.
 
-### 4. Serializer — the response contract
-
-`dashboard/serializers.py` (add to the existing file):
+### 3. Serializer — the response contract (`dashboard/serializers.py`)
 
 ```python
-class DeviceHealthSerializer(serializers.Serializer):
-    device_code = serializers.CharField()
+class SiteHealthSerializer(serializers.Serializer):
     site = serializers.CharField()
     status = serializers.ChoiceField(choices=["ok", "warning", "critical"])
-    avg_temp = serializers.FloatField(allow_null=True)
-    max_temp = serializers.FloatField(allow_null=True)
+    avg_temp = serializers.FloatField()
+    max_temp = serializers.FloatField()
+    alert_count = serializers.IntegerField()
 ```
 
-### 5. View — thin HTTP glue
-
-`dashboard/views.py` (add to the existing file):
+### 4. View — thin HTTP glue (`dashboard/views.py`)
 
 ```python
-from .services import DeviceNotFoundError, get_device_health
+from .services import get_site_health
 
 
-class DeviceHealthView(APIView):
-    """GET /dashboard/device/{device_code}/health -- current status derived
-    from the device's site summary."""
+@cache_response()
+class SiteHealthView(APIView):
+    """GET /dashboard/site/{id}/health -- derived status for a site's
+    latest summary window. All the logic lives in services.get_site_health."""
 
-    def get(self, request, device_code):
-        try:
-            health = get_device_health(device_code)
-        except DeviceNotFoundError:
-            return Response({"detail": "device not found"}, status=404)
-        logger.info("dashboard.device_health served", extra={"device_code": device_code})
-        return Response(DeviceHealthSerializer(health).data)
+    def get(self, request, site_id):
+        health = get_site_health(site_id)
+        if health is None:
+            return Response({"detail": "no summary data for this site"}, status=404)
+        logger.info("dashboard.site_health served", extra={"site_id": site_id, "status": health["status"]})
+        return Response(SiteHealthSerializer(health).data)
 ```
 
-### 6. URL
-
-`dashboard/urls.py`:
+### 5. URL (`dashboard/urls.py`)
 
 ```python
-path("device/<str:device_code>/health", views.DeviceHealthView.as_view(), name="dashboard-device-health"),
+path("site/<str:site_id>/health", views.SiteHealthView.as_view(), name="dashboard-site-health"),
 ```
 
-### 7. Tests — one per layer, per `TESTING_GUIDELINES.md`
+### 6. Tests — one per layer, per `TESTING_GUIDELINES.md`
 
-- **Util**: call `classify_temperature(28, 30)` directly, assert `"warning"` — no mocking needed.
-- **Repository**: `telemetry/tests/test_repository.py` — hit the SQLite test DB (`Device.objects.create(...)` then `get_device_by_code(...)`), assert `DeviceNotFound` for an unknown code.
-- **Service**: `dashboard/tests/test_services.py` — patch `get_device_by_code` and `get_snowflake_client` (same pattern as `MOCK_CLIENT_PATCH` in `dashboard/tests/test_views.py`), assert the returned dict's `status` for a given fixture.
-- **View**: `dashboard/tests/test_views.py` — patch `dashboard.views.get_device_health`, hit `/dashboard/device/dev-001/health` via the Django test client, assert the JSON shape matches the serializer contract.
+- **Util** (`core/tests/test_utils.py`): call `classify_temperature(28, 30)` directly, assert `"warning"` — no mocking needed.
+- **Service** (`dashboard/tests/test_services.py`): patch `dashboard.services.get_snowflake_client` with a small fake object (not the full `MockSnowflakeClient` — the service only needs `get_site_summary`), assert the returned dict's `status` for a given fixture, and that `None` comes back for an empty result.
+- **View** (`dashboard/tests/test_views.py::SiteHealthViewTests`): patch `dashboard.views.get_site_health`, hit `/dashboard/site/A/health` via the Django test client, assert the 200/404 split and that the JSON matches what the mocked service returned.
 
-Each layer's test only mocks the layer directly below it — the view test doesn't need to know Snowflake or Postgres exist at all.
+Each layer's test only mocks the layer directly below it — the view test doesn't need to know Snowflake exists at all, and the service test doesn't spin up an HTTP request.
 
 ---
 

@@ -41,3 +41,21 @@ class DashboardEndpointsTests(TestCase):
         response = self.client.get("/dashboard/alerts")
         self.assertTrue(response.json())
         self.assertTrue(all(row["alert_count"] > 0 for row in response.json()))
+
+
+class SiteHealthViewTests(TestCase):
+    """SiteHealthView delegates to services.get_site_health -- these tests
+    mock the service, not the Snowflake client, per docs/LAYER_GUIDELINES.md
+    ("Each layer's test only mocks the layer directly below it")."""
+
+    def test_returns_health_for_known_site(self):
+        fake_health = {"site": "A", "status": "ok", "avg_temp": 20.0, "max_temp": 25.0, "alert_count": 0}
+        with patch("dashboard.views.get_site_health", return_value=fake_health):
+            response = self.client.get("/dashboard/site/A/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), fake_health)
+
+    def test_returns_404_for_site_with_no_summary_data(self):
+        with patch("dashboard.views.get_site_health", return_value=None):
+            response = self.client.get("/dashboard/site/does-not-exist/health")
+        self.assertEqual(response.status_code, 404)

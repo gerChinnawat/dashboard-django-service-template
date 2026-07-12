@@ -17,3 +17,11 @@ class AlertRowSerializer(serializers.Serializer):
     window_start = serializers.DateTimeField()
     site = serializers.CharField()
     alert_count = serializers.IntegerField()
+
+
+class SiteHealthSerializer(serializers.Serializer):
+    site = serializers.CharField()
+    status = serializers.ChoiceField(choices=["ok", "warning", "critical"])
+    avg_temp = serializers.FloatField()
+    max_temp = serializers.FloatField()
+    alert_count = serializers.IntegerField()
