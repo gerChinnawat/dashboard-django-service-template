@@ -2,14 +2,29 @@
 
 A local dev stack for the CDC → Kafka → Snowflake → Django architecture described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Postgres (OLTP) → Debezium (CDC) → Kafka → Snowflake (OLAP, aggregated) → Django REST API → dashboard.
 
-See also: [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md), [`docs/TESTING_GUIDELINES.md`](docs/TESTING_GUIDELINES.md), [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/GIT_GUIDE.md`](docs/GIT_GUIDE.md).
+See also: [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md), [`docs/TESTING_GUIDELINES.md`](docs/TESTING_GUIDELINES.md), [`docs/LAYER_GUIDELINES.md`](docs/LAYER_GUIDELINES.md), [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md), [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/GIT_GUIDE.md`](docs/GIT_GUIDE.md).
+
+---
+
+## Getting started (first time)
+
+New to this repo? Do these in order — each links to the full section below if you get stuck.
+
+1. [ ] Install Python **3.12** (this repo pins it in `.python-version` — avoid 3.13+, see [Prerequisites](#prerequisites)) and Docker.
+2. [ ] `docker compose up -d` — starts Postgres/Kafka/Debezium/Redis. See [1. Start the local stack](#1-start-the-local-stack).
+3. [ ] `./scripts/register-debezium-connector.sh` — one-time CDC wiring. See [2. Register the Debezium connector](#2-register-the-debezium-connector).
+4. [ ] Set up `django_app/venv` and run the API. See [3. Run the Django API](#3-run-the-django-api). You do **not** need a Snowflake account — the API runs against a mock client by default.
+5. [ ] Run the unit tests (`cd django_app && pytest`) — these need no infra at all and are the fastest way to confirm your environment works. See [Running tests](#running-tests).
+6. [ ] Before your first commit: skim [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md) and [`docs/LAYER_GUIDELINES.md`](docs/LAYER_GUIDELINES.md) (where new code belongs) and run `make lint` (see [Formatting & linting](#formatting--linting)).
+
+If step 4 fails with a `clang`/Xcode error while installing dependencies, it's almost always a Python-version mismatch (see [Prerequisites](#prerequisites)), not a problem with the code — recreate the venv with `python3.12` specifically.
 
 ---
 
 ## Prerequisites
 
 - Docker + Docker Compose
-- Python 3.11–3.12 (avoid 3.13+ for now — `cffi`/`snowflake-connector-python` may not ship prebuilt wheels yet, which forces a source build and fails if your system `clang`/Xcode setup is broken)
+- Python 3.11–3.12 (pinned to `3.12` in `.python-version` — avoid 3.13+ for now, `cffi`/`snowflake-connector-python` may not ship prebuilt wheels yet, which forces a source build and fails if your system `clang`/Xcode setup is broken). If you use `pyenv`, `pyenv install 3.12 && pyenv local 3.12` picks up `.python-version` automatically.
 - `psql` and `curl` (for manual verification steps below)
 
 ---
@@ -119,6 +134,8 @@ pip install -r requirements-format.txt
 make format   # apply black + ruff --fix
 make lint     # check only (what CI should run)
 ```
+
+`make lint` also enforces naming conventions (ruff's `N` rule set) — see [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md). Unlike formatting, naming violations aren't auto-fixed by `make format`; a failing `N` rule needs a manual rename since a tool can't safely guess every call site.
 
 Optionally enable as a pre-commit hook: `pre-commit install`.
 
