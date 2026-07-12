@@ -22,6 +22,7 @@ htmlcov/
 *.cover
 
 # Editors / OS
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 .DS_Store
