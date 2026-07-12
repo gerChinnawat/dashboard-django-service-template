@@ -238,10 +238,10 @@ Any important context
 ## Before Opening a PR
 
 - [ ] Code runs successfully (`python manage.py check`, see `README.md`)
-- [ ] Lint passes (`make lint`)
+- [ ] Lint passes (`make lint`, including naming — see `docs/NAMING_CONVENTIONS.md`)
 - [ ] Tests pass (`pytest`)
 - [ ] No unused debug output (`print`, stray logging)
-- [ ] Code follows `docs/CODING_GUIDELINES.md`
+- [ ] Code follows `docs/CODING_GUIDELINES.md` and `docs/LAYER_GUIDELINES.md` (new code is in the right layer — view/service/repository/model/util)
 - [ ] Branch is up to date with main
 
 ---

@@ -58,6 +58,7 @@ The dashboard consumes only aggregated datasets from Snowflake.
 | Data Streaming | Kafka |
 | Change Data Capture | Debezium |
 | Analytics Database | Snowflake |
+| Response Cache | Redis |
 | Frontend | React / Next.js |
 | Authentication | Django Authentication / SSO |
 
@@ -264,6 +265,8 @@ Every 5–10 minutes
 
 Since near real-time updates are not required, batch ingestion and scheduled transformations provide an efficient balance between freshness, complexity, and cost.
 
+To avoid re-querying Snowflake on every request within that window, dashboard endpoints cache their response in Redis for a short TTL (default 60s, `DASHBOARD_CACHE_TTL_SECONDS`) — well under the 5-minute rollup interval, so cached responses never outlive the data they represent. See `django_app/dashboard/views.py` and `README.md`'s "Caching" section.
+
 ---
 
 ## Performance Considerations
@@ -339,7 +342,6 @@ No component is tightly coupled to another.
 - Data retention policies
 - Snowflake Tasks and Streams
 - Role-based access control
-- Redis caching for frequently accessed dashboards
 - WebSocket support for live notifications
 - Data quality monitoring
 - Distributed tracing and observability

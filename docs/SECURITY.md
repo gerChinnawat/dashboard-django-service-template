@@ -60,6 +60,12 @@ Every endpoint in `dashboard/views.py` (`/dashboard/summary`, `/devices`, `/site
 
 **Before exposing this beyond localhost:** restrict `/metrics` at the network/ingress level (e.g. only allow your Prometheus scraper's IP/service mesh identity), rather than making it internet-reachable alongside the dashboard API.
 
+### 7. Redis (dashboard cache) is unauthenticated and unencrypted
+
+`docker-compose.yml` exposes Redis on `6379` with no `requirepass`/ACL and no TLS — the same gap as #4 above, applied to the cache layer. Redis only ever holds cached dashboard *responses* (see `README.md`'s "Caching" section), not credentials or operational data, but anyone who can reach port `6379` can read every cached response or flush the cache to force load back onto Snowflake.
+
+**Do not** publish `6379` beyond `localhost`/an isolated network. For anything beyond local dev, set `requirepass` (or ACLs) and connect over TLS, updating `REDIS_URL` accordingly.
+
 ---
 
 ## Minimum Hardening Checklist Before Any Non-Local Deployment
@@ -71,3 +77,4 @@ Every endpoint in `dashboard/views.py` (`/dashboard/summary`, `/devices`, `/site
 - [ ] Confirm `.env` is never committed (`.gitignore` already covers this — verify before every commit with untracked secrets)
 - [ ] Restrict the Snowflake role used by `SnowflakeClient` to read-only access on the summary tables it queries (`device_summary_5m`, etc.) — it should never need write access to `telemetry_raw`
 - [ ] Restrict `/metrics` to trusted scrapers only (network policy/ingress rule), not publicly reachable
+- [ ] Set a Redis `requirepass`/ACL and enable TLS; do not expose `6379` publicly
