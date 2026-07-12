@@ -1,0 +1,8 @@
+# Dependencies for the top-level integration/e2e suite (tests/).
+# Unit tests for the Django app live under django_app/ and use
+# django_app/requirements-dev.txt instead.
+pytest>=8.0,<9.0
+psycopg2-binary>=2.9,<3.0
+kafka-python>=2.0,<3.0
+requests>=2.31,<3.0
+python-dotenv>=1.0,<2.0

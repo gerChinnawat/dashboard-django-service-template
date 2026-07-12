@@ -1,0 +1,6 @@
+# Formatting/linting tools, shared across the whole repo (django_app/ and
+# tests/). Config lives in pyproject.toml. Install with:
+#   pip install -r requirements-format.txt
+black>=24.0,<25.0
+ruff>=0.6,<1.0
+pre-commit>=3.7,<4.0
